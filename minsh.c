@@ -6,10 +6,16 @@
 #include <linux/limits.h>
 #include <signal.h>
 
+#define NUM_BUILTIN 3
 #define BUFFER_SIZE 1024
+#define streq(a, b) (strcmp((a), (b)) == 0)
+#define PROGRAM_NAME "minsh"
 
 char *username = NULL;
 char *hostname = NULL;
+char *builtin_names[NUM_BUILTIN] = {
+    "help", "exit", "cd",
+};
 
 void handle_ctrl_c(int sig);
 void cleanup(void);
@@ -17,6 +23,12 @@ void print_ps1(void);
 char *read_string(void);
 char **split(char *str, int *ntok);
 void execute(char **cmd);
+bool is_builtin(char **cmd);
+void execute_builtin(char **cmd);
+
+void builtin_help(void);
+void builtin_exit(void);
+void builtin_cd(char *dstdir);
 
 int main(int argc, char **argv)
 {
@@ -103,13 +115,18 @@ void execute(char **cmd)
     if (!cmd[0])
         return;
 
+    if (is_builtin(cmd)) {
+        execute_builtin(cmd);
+        return;
+    }
+
     pid_t pid = fork();
     if (pid < 0) {
-        perror("minsh");
+        perror(PROGRAM_NAME);
         exit(1);
     } else if (pid == 0) {
         if (execvp(cmd[0], cmd) < 0)
-            perror("minsh");
+            perror(PROGRAM_NAME);
         exit(1);
     } else {
         int status;
@@ -117,4 +134,46 @@ void execute(char **cmd)
             waitpid(pid, &status, WUNTRACED);
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }
+}
+
+bool is_builtin(char **cmd)
+{
+    char *name = cmd[0];
+    for (int i = 0; i < NUM_BUILTIN; ++i)
+        if (streq(name, builtin_names[i]))
+            return true;
+    return false;
+}
+
+void execute_builtin(char **cmd)
+{
+    char *name = cmd[0];
+    if (streq(name, "help"))
+        builtin_help();
+    else if (streq(name, "exit"))
+        builtin_exit();
+    else if (streq(name, "cd")) {
+        if (cmd[2] != NULL) {
+            printf("%s: cd: too many arguments\n", PROGRAM_NAME);
+            return;
+        }
+        builtin_cd(cmd[1]);
+    }
+}
+
+void builtin_help(void)
+{
+    printf("%s: simple shell\n", PROGRAM_NAME);
+    printf("run commands by typing them into the prompt\n");
+}
+
+void builtin_exit(void)
+{
+    exit(0);
+}
+
+void builtin_cd(char *dstdir)
+{
+    if (chdir(dstdir) != 0)
+        perror(PROGRAM_NAME);
 }
