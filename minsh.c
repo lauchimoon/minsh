@@ -3,37 +3,33 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #define BUFFER_SIZE 1024
 
+void handle_ctrl_c(int sig);
 char *read_string(void);
 char **split(char *str, int *ntok);
+void execute(char **cmd);
 
 int main(int argc, char **argv)
 {
-    char *prompt = read_string();
-    int n_args = 0;
-    char **args = split(prompt, &n_args);
+    signal(SIGINT, handle_ctrl_c);
+    while (1) {
+        char *prompt = read_string();
+        int n_args = 0;
+        char **args = split(prompt, &n_args);
+        execute(args);
 
-    pid_t pid = fork();
-    if (pid < 0) {
-        perror("minsh");
-        return 1;
-    } else if (pid == 0) {
-        if (execvp(args[0], args) < 0) {
-            perror("minsh");
-            return 1;
-        }
-    } else {
-        int status;
-        do {
-            waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        free(args);
+        free(prompt);
     }
-
-    free(args);
-    free(prompt);
     return 0;
+}
+
+void handle_ctrl_c(int sig)
+{
+    printf("\n");
 }
 
 char *read_string(void)
@@ -73,4 +69,22 @@ char **split(char *str, int *ntok)
     }
     *ntok = pos;
     return tokens;
+}
+
+void execute(char **cmd)
+{
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("minsh");
+        exit(1);
+    } else if (pid == 0) {
+        if (execvp(cmd[0], cmd) < 0)
+            perror("minsh");
+        exit(1);
+    } else {
+        int status;
+        do {
+            waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
 }
