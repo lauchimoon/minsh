@@ -36,7 +36,7 @@ void builtin_help(void);
 void builtin_exit(void);
 void builtin_cd(char *dstdir);
 
-int main(int argc, char **argv)
+int main()
 {
     signal(SIGINT, handle_ctrl_c);
     atexit(cleanup);
@@ -61,6 +61,8 @@ void handle_ctrl_c(int sig)
     write(STDOUT_FILENO, "\n", 1);
     print_ps1();
     fflush(stdout);
+
+    (void)sig;
 }
 
 void cleanup(void)
@@ -105,7 +107,6 @@ char **split(char *str, int *ntok)
 {
     int pos = 0;
     int size = BUFFER_SIZE;
-    char *dup_str = strdup(str);
     char **tokens = malloc(sizeof(char *)*size);
     char *tok = strtok(str, " ");
     while (tok) {
@@ -181,8 +182,6 @@ char *replace_all(char *s, char c, char *replace)
     for (int i = 0; s[i]; ++i)
         c_count += (s[i] == c);
 
-    int s_len = strlen(s);
-    int replace_len = strlen(replace);
     StringBuilder *sb = sb_new(strlen(s));
 
     for (int i = 0; s[i]; ++i) {
