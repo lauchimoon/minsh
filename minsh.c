@@ -93,6 +93,7 @@ char **split(char *str, int *ntok)
         tokens[pos++] = tok;
         tok = strtok(NULL, " ");
     }
+    tokens[pos] = NULL;
     *ntok = pos;
     return tokens;
 }
