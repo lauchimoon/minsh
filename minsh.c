@@ -1,10 +1,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <linux/limits.h>
 #include <signal.h>
+#include <errno.h>
+
+#include "strbuilder.h"
 
 #define NUM_BUILTIN 3
 #define BUFFER_SIZE 1024
@@ -13,6 +17,7 @@
 
 char *username = NULL;
 char *hostname = NULL;
+char *home_dir = NULL;
 char *builtin_names[NUM_BUILTIN] = {
     "help", "exit", "cd",
 };
@@ -25,6 +30,7 @@ char **split(char *str, int *ntok);
 void execute(char **cmd);
 bool is_builtin(char **cmd);
 void execute_builtin(char **cmd);
+char *replace_all(char *s, char c, char *replace);
 
 void builtin_help(void);
 void builtin_exit(void);
@@ -35,6 +41,7 @@ int main(int argc, char **argv)
     signal(SIGINT, handle_ctrl_c);
     atexit(cleanup);
     username = getenv("USER");
+    home_dir = getenv("HOME");
     hostname = malloc(sizeof(char)*PATH_MAX);
     gethostname(hostname, PATH_MAX);
     while (1) {
@@ -119,14 +126,16 @@ void execute(char **cmd)
         execute_builtin(cmd);
         return;
     }
-
     pid_t pid = fork();
     if (pid < 0) {
-        perror(PROGRAM_NAME);
+        printf("%s: %s\n", PROGRAM_NAME, strerror(errno));
         exit(1);
     } else if (pid == 0) {
-        if (execvp(cmd[0], cmd) < 0)
-            perror(PROGRAM_NAME);
+        char *name = cmd[0];
+        if (execvp(name, cmd) < 0) {
+            printf("%s: %s: %s\n", PROGRAM_NAME, name, strerror(errno));
+            exit(1);
+        }
         exit(1);
     } else {
         int status;
@@ -153,12 +162,39 @@ void execute_builtin(char **cmd)
     else if (streq(name, "exit"))
         builtin_exit();
     else if (streq(name, "cd")) {
-        if (cmd[2] != NULL) {
+        if (cmd[2]) {
             printf("%s: cd: too many arguments\n", PROGRAM_NAME);
             return;
         }
-        builtin_cd(cmd[1]);
+        char *new_arg = replace_all(cmd[1], '~', home_dir);
+        builtin_cd(new_arg);
+        free(new_arg);
     }
+}
+
+char *replace_all(char *s, char c, char *replace)
+{
+    if (!s)
+        return NULL;
+
+    int c_count = 0;
+    for (int i = 0; s[i]; ++i)
+        c_count += (s[i] == c);
+
+    int s_len = strlen(s);
+    int replace_len = strlen(replace);
+    StringBuilder *sb = sb_new(strlen(s));
+
+    for (int i = 0; s[i]; ++i) {
+        if (s[i] == c)
+            sb_write_string(sb, replace);
+        else
+            sb_write_char(sb, s[i]);
+    }
+    char *result = calloc(sb->size, sizeof(char));
+    memcpy(result, sb->string, sb->size);
+    sb_free(sb);
+    return result;
 }
 
 void builtin_help(void)
@@ -174,6 +210,10 @@ void builtin_exit(void)
 
 void builtin_cd(char *dstdir)
 {
+    if (!dstdir) {
+        chdir(home_dir);
+        return;
+    }
     if (chdir(dstdir) != 0)
-        perror(PROGRAM_NAME);
+        printf("%s: cd: %s: %s\n", PROGRAM_NAME, dstdir, strerror(errno));
 }
