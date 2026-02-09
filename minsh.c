@@ -7,6 +7,8 @@
 #include <linux/limits.h>
 #include <signal.h>
 #include <errno.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "strbuilder.h"
 
@@ -24,8 +26,7 @@ char *builtin_names[NUM_BUILTIN] = {
 
 void handle_ctrl_c(int sig);
 void cleanup(void);
-void print_ps1(void);
-char *read_string(void);
+void format_ps1(char *buf, int buf_size);
 char **split(char *str, int *ntok);
 void execute(char **cmd);
 bool is_builtin(char **cmd);
@@ -44,11 +45,17 @@ int main()
     home_dir = getenv("HOME");
     hostname = malloc(sizeof(char)*PATH_MAX);
     gethostname(hostname, PATH_MAX);
+
     while (1) {
-        print_ps1();
-        char *prompt = read_string();
+        char ps1[BUFFER_SIZE] = { 0 };
+        format_ps1(ps1, BUFFER_SIZE);
+        char *prompt = readline(ps1);
         int n_args = 0;
+        if (!prompt)
+            exit(0);
+
         char **args = split(prompt, &n_args);
+        add_history(prompt);
         execute(args);
         free(args);
         free(prompt);
@@ -59,8 +66,9 @@ int main()
 void handle_ctrl_c(int sig)
 {
     write(STDOUT_FILENO, "\n", 1);
-    print_ps1();
-    fflush(stdout);
+    rl_on_new_line();
+    rl_replace_line("", 0);
+    rl_redisplay();
 
     (void)sig;
 }
@@ -70,41 +78,17 @@ void cleanup(void)
     free(hostname);
 }
 
-void print_ps1(void)
+void format_ps1(char *buf, int buf_size)
 {
     char cwd_buffer[PATH_MAX] = { 0 };
     getcwd(cwd_buffer, PATH_MAX);
-    printf("[%s@%s %s]$ ", username, hostname, cwd_buffer);
-}
-
-char *read_string(void)
-{
-    int c;
-    int pos = 0;
-    int size = BUFFER_SIZE;
-    char *buffer = malloc(sizeof(char)*size);
-
-    while (1) {
-        c = getchar();
-        if (c == EOF) {
-            printf("\n");
-            exit(0);
-        }
-        else if (c == '\n') {
-            buffer[pos] = '\0';
-            return buffer;
-        } else {
-            if (pos >= size/2) {
-                size *= 2;
-                buffer = realloc(buffer, sizeof(char)*size);
-            }
-            buffer[pos++] = c;
-        }
-    }
+    snprintf(buf, buf_size, "[%s@%s %s]$ ", username, hostname, cwd_buffer);
 }
 
 char **split(char *str, int *ntok)
 {
+    if (!str)
+        return NULL;
     int pos = 0;
     int size = BUFFER_SIZE;
     char **tokens = malloc(sizeof(char *)*size);
