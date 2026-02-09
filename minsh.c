@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <libgen.h>
 
 #include "strbuilder.h"
 
@@ -82,7 +83,7 @@ void format_ps1(char *buf, int buf_size)
 {
     char cwd_buffer[PATH_MAX] = { 0 };
     getcwd(cwd_buffer, PATH_MAX);
-    snprintf(buf, buf_size, "[%s@%s %s]$ ", username, hostname, cwd_buffer);
+    snprintf(buf, buf_size, "[%s@%s %s]$ ", username, hostname, basename(cwd_buffer));
 }
 
 char **split(char *str, int *ntok)
