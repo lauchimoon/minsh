@@ -6,5 +6,6 @@ Simple shell in C.
 $ git clone https://github.com/lauchimoon/minsh
 $ cd minsh/
 $ chmod +x build.sh
+$ ./build.sh
 $ ./minsh
 ```
